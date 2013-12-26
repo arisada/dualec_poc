@@ -1,0 +1,165 @@
+From 18b5359ceea65263fbaca9c3d6f62a4f11e473b4 Mon Sep 17 00:00:00 2001
+From: Aris Adamantiadis <aris@0xbadc0de.be>
+Date: Thu, 26 Dec 2013 23:54:37 +0100
+Subject: [PATCH] Test: enable debugging + include bn functions in FIPS build
+
+---
+ Makefile.fips            |    3 +++
+ crypto/bn/bn_kron.c      |    2 ++
+ crypto/bn/bn_print.c     |   12 ++++++++++++
+ crypto/bn/bn_sqrt.c      |    1 +
+ fips/rand/fips_drbg_ec.c |   13 ++++++++++---
+ 5 files changed, 28 insertions(+), 3 deletions(-)
+
+diff --git a/Makefile.fips b/Makefile.fips
+index 74db065..03472b4 100644
+--- a/Makefile.fips
++++ b/Makefile.fips
+@@ -286,16 +286,19 @@ FIPS_EX_OBJ= ../crypto/aes/aes_cfb.o \
+ 	../crypto/bn/bn_exp.o \
+ 	../crypto/bn/bn_gcd.o \
+ 	../crypto/bn/bn_gf2m.o \
++	../crypto/bn/bn_kron.o \
+ 	../crypto/bn/bn_lib.o \
+ 	../crypto/bn/bn_mod.o \
+ 	../crypto/bn/bn_mont.o \
+ 	../crypto/bn/bn_mul.o \
+ 	../crypto/bn/bn_nist.o \
+ 	../crypto/bn/bn_prime.o \
++	../crypto/bn/bn_print.o \
+ 	../crypto/bn/bn_rand.o \
+ 	../crypto/bn/bn_recp.o \
+ 	../crypto/bn/bn_shift.o \
+ 	../crypto/bn/bn_sqr.o \
++	../crypto/bn/bn_sqrt.o \
+ 	../crypto/bn/bn_word.o \
+ 	../crypto/bn/bn_x931p.o \
+ 	../crypto/buffer/buf_str.o \
+diff --git a/crypto/bn/bn_kron.c b/crypto/bn/bn_kron.c
+index 740359b..d013c38 100644
+--- a/crypto/bn/bn_kron.c
++++ b/crypto/bn/bn_kron.c
+@@ -53,6 +53,8 @@
+  *
+  */
+ 
++#define OPENSSL_FIPSAPI
++
+ #include "cryptlib.h"
+ #include "bn_lcl.h"
+ 
+diff --git a/crypto/bn/bn_print.c b/crypto/bn/bn_print.c
+index 1743b6a..9394ce0 100644
+--- a/crypto/bn/bn_print.c
++++ b/crypto/bn/bn_print.c
+@@ -56,6 +56,8 @@
+  * [including the GNU Public Licence.]
+  */
+ 
++#define OPENSSL_FIPSAPI
++
+ #include <stdio.h>
+ #include <ctype.h>
+ #include "cryptlib.h"
+@@ -99,6 +101,7 @@ err:
+ 	return(buf);
+ 	}
+ 
++#if 0
+ /* Must 'OPENSSL_free' the returned data */
+ char *BN_bn2dec(const BIGNUM *a)
+ 	{
+@@ -169,6 +172,8 @@ err:
+ 	return(buf);
+ 	}
+ 
++#endif
++
+ int BN_hex2bn(BIGNUM **bn, const char *a)
+ 	{
+ 	BIGNUM *ret=NULL;
+@@ -236,6 +241,7 @@ err:
+ 	return(0);
+ 	}
+ 
++#if 0
+ int BN_dec2bn(BIGNUM **bn, const char *a)
+ 	{
+ 	BIGNUM *ret=NULL;
+@@ -314,6 +320,9 @@ int BN_asc2bn(BIGNUM **bn, const char *a)
+ 		(*bn)->neg = 1;
+ 	return 1;
+ 	}
++#endif
++
++#define OPENSSL_NO_BIO
+ 
+ #ifndef OPENSSL_NO_BIO
+ #ifndef OPENSSL_NO_FP_API
+@@ -358,6 +367,7 @@ end:
+ 	}
+ #endif
+ 
++#if 0
+ char *BN_options(void)
+ 	{
+ 	static int init=0;
+@@ -376,3 +386,5 @@ char *BN_options(void)
+ 		}
+ 	return(data);
+ 	}
++
++#endif
+diff --git a/crypto/bn/bn_sqrt.c b/crypto/bn/bn_sqrt.c
+index 6beaf9e..cefe6bf 100644
+--- a/crypto/bn/bn_sqrt.c
++++ b/crypto/bn/bn_sqrt.c
+@@ -54,6 +54,7 @@
+  * Hudson (tjh@cryptsoft.com).
+  *
+  */
++#define OPENSSL_FIPSAPI
+ 
+ #include "cryptlib.h"
+ #include "bn_lcl.h"
+diff --git a/fips/rand/fips_drbg_ec.c b/fips/rand/fips_drbg_ec.c
+index 6be6534..942d142 100644
+--- a/fips/rand/fips_drbg_ec.c
++++ b/fips/rand/fips_drbg_ec.c
+@@ -61,7 +61,7 @@
+ #include <openssl/bn.h>
+ #include "fips_rand_lcl.h"
+ 
+-/*#define EC_DRBG_TRACE*/
++#define EC_DRBG_TRACE
+ 
+ #ifdef EC_DRBG_TRACE
+ static void hexprint(FILE *out, const unsigned char *buf, int buflen)
+@@ -202,6 +202,8 @@ static int bin2bnbits(DRBG_CTX *dctx, BIGNUM *r, const unsigned char *buf)
+ 
+ static int drbg_ec_mul(DRBG_EC_CTX *ectx, BIGNUM *r, const BIGNUM *s, int use_q)
+ 	{
++	BIGNUM *y = BN_new();
++	int ret;
+ 	if (use_q)
+ 		{
+ 		if (!EC_POINT_mul(ectx->curve, ectx->ptmp,
+@@ -215,8 +217,13 @@ static int drbg_ec_mul(DRBG_EC_CTX *ectx, BIGNUM *r, const BIGNUM *s, int use_q)
+ 			return 0;
+ 		}
+ 	/* Get x coordinate of result */
+-	if (!EC_POINT_get_affine_coordinates_GFp(ectx->curve, ectx->ptmp, r,
+-							NULL, ectx->bctx))
++	ret = EC_POINT_get_affine_coordinates_GFp(ectx->curve, ectx->ptmp, r,
++							y, ectx->bctx);
++#ifdef EC_DRBG_TRACE
++	bnprint(stderr, "y coordinate at end of mul: ", y);
++#endif
++	BN_free(y);
++	if(!ret)
+ 		return 0;
+ 	return 1;
+ 	}
+-- 
+1.7.10.4
+

@@ -1,0 +1,24 @@
+What is it ?
+------------
+
+This is a proof of concept over the Dual_ec_drbg backdoor from NSA. It proves that
+manipulating only one of the constants is enough to predict output from PRNG.
+
+How to compile
+--------------
+
+Get the git version of FIPS openssl
+git clone git://git.openssl.org/openssl.git
+cd openssl
+git branch fips 4089bd6080d41450adab1e0ac0d63cfeab4a78e7
+git checkout fips
+git am ../0001-Test-enable-debugging-include-bn-functions-in-FIPS-b.patch
+
+./config fipscanisteronly
+make
+
+If there's something that doesn't compile here... good luck. Do not attempt compiling regular libcrypto together with FIPS, it's not going to work.
+
+cd ..
+make
+./dual_ec_drbg_poc
